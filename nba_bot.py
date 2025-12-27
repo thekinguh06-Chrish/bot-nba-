@@ -1,56 +1,56 @@
 import requests
 import time
-import asyncio
 
-# --- CONFIGURACIÓN ---
+# --- TU CONFIGURACIÓN ---
 TOKEN = "8406773199:AAGuhkOWueMc6F0gOcFTNhrYQzxP_Un4QPs"
 CHAT_ID = "1769825135"
-EQUIPOS_INTERES = ["Celtics", "Heat", "Hawks", "76ers", "Bulls", "Clippers", "Rockets", "Suns", "Nuggets", "Timberwolves"]
-META_PUNTOS = 22
 
-def obtener_puntos_nba():
-    # Esta URL es la API de ESPN, permitida en todos lados
+# Listas basadas en tu Excel
+EQUIPOS_TOP = ["Lakers", "Heat", "Celtics", "76ers", "Knicks", "Cavs", "Hornets", "Suns","Rockets","Timberwolves","Nuggets"]
+JUGADORES_TOP = ["Luka Doncic", "J. Brunson", "J. Embiid", "James Harden", "D.Mitchell", "Kevin Durant","LaMelo Ball","J.Clarkson","Nic Claxton","Dillon Brooks","D.Booker","Antony Edwards","Nicola Jokic"]
+
+def verificar_partidos_hoy():
     url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
-    
     try:
         response = requests.get(url, timeout=15)
         if response.status_code == 200:
             data = response.json()
             eventos = data.get('events', [])
             
-            encontrado = False
+            mensajes = []
             for evento in eventos:
-                for competidor in evento.get('competitions', [])[0].get('competitors', []):
-                    nombre_equipo = competidor.get('team', {}).get('shortDisplayName')
-                    puntos = int(competidor.get('score', 0))
-                    
-                    if nombre_equipo in EQUIPOS_INTERES:
-                        encontrado = True
-                        print(f"🏀 {nombre_equipo}: {puntos} pts")
-                        if puntos >= META_PUNTOS:
-                            enviar_telegram(nombre_equipo, puntos)
-            
-            if not encontrado:
-                print("No hay partidos en curso de tus equipos en este momento.")
-        else:
-            print(f"⚠️ Error de servidor: {response.status_code}")
+                # Obtenemos nombres de los equipos que juegan
+                home_team = evento['competitions'][0]['competitors'][0]['team']['displayName']
+                away_team = evento['competitions'][0]['competitors'][1]['team']['displayName']
+                
+                # 1. Verificar si juega un EQUIPO de tu lista
+                for equipo in EQUIPOS_TOP:
+                    if equipo in home_team or equipo in away_team:
+                        mensajes.append(f"🏀 HOY PARTIDO DE LOS {equipo.upper()}")
+
+                # 2. Verificar si juega un JUGADOR de tu lista (basado en su equipo)
+                # Nota: Aquí asociamos al jugador con su equipo para saber si juega
+                if "Mavericks" in home_team or "Mavericks" in away_team:
+                    if "Luka Doncic" in JUGADORES_TOP:
+                        mensajes.append(f"⭐ HOY JUEGA TU JUGADOR: LUKA DONCIC")
+                
+                if "Heat" in home_team or "Heat" in away_team:
+                    mensajes.append(f"🔥 HOY PARTIDO DEL MIAMI HEAT")
+
+            # Eliminar duplicados y enviar
+            final_list = list(set(mensajes))
+            if final_list:
+                texto_final = "📅 **AGENDA NBA PARA HOY** 📅\n\n" + "\n".join(final_list)
+                enviar_telegram(texto_final)
+            else:
+                print("No hay partidos de tu interés hoy.")
     except Exception as e:
-        print(f"❌ Error de conexión: {e}")
+        print(f"Error: {e}")
 
-def enviar_telegram(equipo, puntos):
+def enviar_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    mensaje = f"🏀 ALERT NBA 🏀\n\n✅ {equipo} ya tiene {puntos} puntos!"
-    try:
-        requests.post(url, json={"chat_id": CHAT_ID, "text": mensaje})
-    except:
-        pass
-
-async def loop_principal():
-    while True:
-        print(f"\n[{time.strftime('%H:%M:%S')}] 🔄 Vigilando marcadores...")
-        obtener_puntos_nba()
-        print("💤 Esperando 5 minutos...")
-        await asyncio.sleep(300)
+    requests.post(url, json={"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "Markdown"})
 
 if __name__ == "__main__":
-    asyncio.run(loop_principal())
+    print("Verificando agenda del día...")
+    verificar_partidos_hoy()
