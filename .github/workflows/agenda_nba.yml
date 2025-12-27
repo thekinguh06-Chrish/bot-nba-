@@ -1,0 +1,25 @@
+name: NBA Agenda Bot
+
+on:
+  schedule:
+    # Se ejecuta todos los días a las 09:00 UTC (Ajusta según tu zona horaria)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Esto permite que lo corras manualmente cuando quieras
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Instalar librerías
+        run: pip install requests
+
+      - name: Ejecutar Bot
+        run: python nba_bot.py
