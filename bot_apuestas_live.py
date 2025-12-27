@@ -1,85 +1,63 @@
 import requests
 import time
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # --- CONFIGURACIÓN ---
 TOKEN = "8406773199:AAGuhkOWueMc6F0gOcFTNhrYQzxP_Un4QPs"
 CHAT_ID = "1769825135"
 
-# TU LISTA COMPLETA DE LIGAS
 DEPORTES = {
-    "NBA": "basketball/nba",
-    "NHL (Hockey)": "hockey/nhl",
-    "Champions League": "soccer/uefa.champions",
-    "Liga MX": "soccer/mex.1",
-    "LaLiga": "soccer/esp.1",
-    "Bundesliga": "soccer/ger.1",
-    "Eredivisie": "soccer/ned.1",
-    "Serie A": "soccer/ita.1",
-    "Premier League": "soccer/eng.1",
-    "Europa League": "soccer/uefa.europa",
-    "Libertadores": "soccer/libertadores",
-    "Liga Portugal": "soccer/por.1",
-    "Escocia": "soccer/sco.1",
-    "Turquía": "soccer/tur.1"
+    "NBA": "basketball/nba", "NHL (Hockey)": "hockey/nhl",
+    "Champions League": "soccer/uefa.champions", "Liga MX": "soccer/mex.1",
+    "LaLiga": "soccer/esp.1", "Bundesliga": "soccer/ger.1",
+    "Eredivisie": "soccer/ned.1", "Serie A": "soccer/ita.1",
+    "Premier League": "soccer/eng.1", "Europa League": "soccer/uefa.europa",
+    "Libertadores": "soccer/libertadores", "Liga Portugal": "soccer/por.1",
+    "Escocia": "soccer/sco.1", "Turquía": "soccer/tur.1"
 }
 
+# --- SERVIDOR FANTASMA PARA RENDER ---
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot en linea")
+
+def run_server():
+    server = HTTPServer(('0.0.0.0', 10000), SimpleHandler)
+    server.serve_forever()
+
+# --- LÓGICA DEL BOT ---
 def analizar_vivo():
     alertas = []
     for nombre, path in DEPORTES.items():
         url = f"https://site.api.espn.com/apis/site/v2/sports/{path}/scoreboard"
         try:
             res = requests.get(url, timeout=10).json()
-            eventos = res.get('events', [])
-            
-            for ev in eventos:
-                estado = ev['status']['type']['state']
-                # Solo analizamos partidos EN VIVO
-                if estado == "in":
+            for ev in res.get('events', []):
+                if ev['status']['type']['state'] == "in":
                     detalles = ev['competitions'][0]
                     home = detalles['competitors'][0]
                     away = detalles['competitors'][1]
-                    
-                    nombre_home = home['team']['displayName']
-                    nombre_away = away['team']['displayName']
-                    score_home = int(home['score'])
-                    score_away = int(away['score'])
-
-                    # --- LÓGICA DE APUESTA (60-70% PROB) ---
-                    
-                    # ⚽ FÚTBOL (Incluye Liga MX y Champions)
-                    # Alerta: Empate al minuto 70+ (Probabilidad de gol en los últimos 20 min)
-                    if "soccer" in path:
-                        reloj = ev['status']['displayValue']
-                        if "70" in reloj or "75" in reloj or "80" in reloj:
-                            if score_home == score_away:
-                                alertas.append(f"⚽ **ALERTA FÚTBOL ({nombre})**\n🎯 Probabilidad: 65% (+0.5 Goles)\n⏰ Minuto: {reloj}\n🏟️ {nombre_away} {score_away} - {score_home} {nombre_home}")
-
-                    # 🏒 HOCKEY
-                    if "hockey" in path:
-                        if score_home + score_away >= 4:
-                            alertas.append(f"🏒 **ALERTA HOCKEY (NHL)**\n🎯 Probabilidad: 60% (Alta puntuación)\n📊 Marcador: {score_away} - {score_home}")
-
-                    # 🏀 NBA
-                    if "nba" in path:
-                        periodo = ev['status']['period']
-                        if periodo >= 4 and abs(score_home - score_away) < 5:
-                            alertas.append(f"🏀 **ALERTA NBA LIVE**\n🎯 Probabilidad: 70% (Final cerrado)\n🔥 {nombre_away} {score_away} - {score_home} {nombre_home}")
-
-        except Exception:
-            continue
+                    reloj = ev['status']['displayValue']
+                    # Alerta si es minuto 70+ y van empatados o diferencia de 1
+                    if "soccer" in path and ("7" in reloj or "8" in reloj):
+                        if abs(int(home['score']) - int(away['score'])) <= 1:
+                            alertas.append(f"⚽ **ALERTA ({nombre})**\n🎯 Minuto: {reloj}\n🏟️ {away['team']['displayName']} {away['score']} - {home['score']} {home['team']['displayName']}")
+        except: continue
     return alertas
 
 def enviar_telegram(msj):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": msj, "parse_mode": "Markdown"})
+    requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", json={"chat_id": CHAT_ID, "text": msj, "parse_mode": "Markdown"})
 
 if __name__ == "__main__":
-    print("Iniciando monitor en vivo...")
-    enviar_telegram("🚀 **MONITOR MULTIDEPORTE ACTIVADO**\n\nAnalizando 14 competiciones en tiempo real (Incluye Liga MX y Champions).")
+    # Iniciar servidor en segundo plano para Render
+    threading.Thread(target=run_server, daemon=True).start()
+    
+    enviar_telegram("🚀 **MONITOR MULTIDEPORTE ACTIVADO**\n\nAnalizando 14 competiciones. ¡Listo para las alertas en vivo!")
     
     while True:
-        oportunidades = analizar_vivo()
-        for op in oportunidades:
+        for op in analizar_vivo():
             enviar_telegram(op)
-        # Revisa cada 10 minutos
         time.sleep(600)
