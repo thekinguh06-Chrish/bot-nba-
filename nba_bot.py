@@ -23,25 +23,31 @@ def verificar_partidos_hoy():
                 home_team = evento['competitions'][0]['competitors'][0]['team']['displayName']
                 away_team = evento['competitions'][0]['competitors'][1]['team']['displayName']
                 
-                # 1. Verificar si juega un EQUIPO de tu lista
+               # 1. Verificar EQUIPOS (Evita duplicados comparando nombres clave)
                 for equipo in EQUIPOS_TOP:
-                    if equipo in home_team or equipo in away_team:
-                        mensajes.append(f"🏀 HOY PARTIDO DE LOS {equipo.upper()}")
+                    if equipo.lower() in home_team.lower() or equipo.lower() in away_team.lower():
+                        if equipo == "Heat":
+                            mensajes.append("🔥 HOY PARTIDO DEL MIAMI HEAT")
+                        else:
+                            mensajes.append(f"🏀 HOY PARTIDO DE LOS {equipo.upper()}")
 
-                # 2. Verificar si juega un JUGADOR de tu lista (basado en su equipo)
-                # Nota: Aquí asociamos al jugador con su equipo para saber si juega
-                if "Mavericks" in home_team or "Mavericks" in away_team:
-                    if "Luka Doncic" in JUGADORES_TOP:
-                        mensajes.append(f"⭐ HOY JUEGA TU JUGADOR: LUKA DONCIC")
+                # 2. Verificar JUGADORES (Asociados a sus equipos actuales)
+                # Luka / Lakers
+                if "Lakers" in home_team or "Lakers" in away_team:
+                    mensajes.append("⭐ HOY JUEGA TU JUGADOR: LUKA DONCIC")
                 
-                if "Heat" in home_team or "Heat" in away_team:
-                    mensajes.append(f"🔥 HOY PARTIDO DEL MIAMI HEAT")
+                # Brunson / Knicks
+                if "Knicks" in home_team or "Knicks" in away_team:
+                    if "J. Brunson" in JUGADORES_TOP:
+                        mensajes.append("⭐ HOY JUEGA TU JUGADOR: J. BRUNSON")
 
-            # Eliminar duplicados y enviar
-            final_list = list(set(mensajes))
-            if final_list:
-                texto_final = "📅 **AGENDA NBA PARA HOY** 📅\n\n" + "\n".join(final_list)
+            # --- LIMPIEZA DE DUPLICADOS Y ORDEN ---
+            mensajes_finales = sorted(list(set(mensajes)))
+
+            if mensajes_finales:
+                texto_final = "📅 **AGENDA NBA PARA HOY** 📅\n\n" + "\n".join(mensajes_finales)
                 enviar_telegram(texto_final)
+                print("Mensaje enviado con éxito.")
             else:
                 print("No hay partidos de tu interés hoy.")
     except Exception as e:
@@ -49,7 +55,10 @@ def verificar_partidos_hoy():
 
 def enviar_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "Markdown"})
+    try:
+        requests.post(url, json={"chat_id": CHAT_ID, "text": mensaje, "parse_mode": "Markdown"})
+    except Exception as e:
+        print(f"Error enviando a Telegram: {e}")
 
 if __name__ == "__main__":
     print("Verificando agenda del día...")
